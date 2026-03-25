@@ -44,6 +44,11 @@ func AuthMiddleware(authService *auth.AuthService) gin.HandlerFunc {
 			}
 		}
 
+		// Fallback to query parameter (needed for <audio> element which can't send headers)
+		if token == "" {
+			token = c.Query("token")
+		}
+
 		if token == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing authentication"})
 			c.Abort()

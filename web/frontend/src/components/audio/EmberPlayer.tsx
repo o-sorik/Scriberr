@@ -2,6 +2,7 @@ import { useRef, useState, useEffect, forwardRef, useImperativeHandle, useCallba
 import { Play, Pause, AlertCircle } from "lucide-react";
 import { AudioVisualizer } from "./AudioVisualizer";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/features/auth/store/authStore";
 
 export interface EmberPlayerRef {
     seekTo: (time: number) => void;
@@ -44,10 +45,11 @@ export const EmberPlayer = forwardRef<EmberPlayerRef, EmberPlayerProps>(
             isPlaying: () => isPlaying
         }));
 
-        // --- 2. URL Logic ---
+        // --- 2. URL Logic (append auth token for <audio> element) ---
         let streamUrl = src;
         if (!streamUrl && audioId) {
-            streamUrl = `/api/v1/transcription/${audioId}/audio`;
+            const token = useAuthStore.getState().token;
+            streamUrl = `/api/v1/transcription/${audioId}/audio${token ? `?token=${token}` : ''}`;
         }
 
         // --- 3. Audio Handlers ---

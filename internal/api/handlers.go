@@ -277,10 +277,14 @@ func (h *Handler) UploadAudio(c *gin.Context) {
 		return
 	}
 
-	// Check if file is .webm and convert to MP3
-	// WebM files from browser MediaRecorder often lack proper duration metadata,
-	// causing playback issues. Converting to MP3 ensures proper metadata.
-	if strings.ToLower(filepath.Ext(filePath)) == ".webm" {
+	// Convert non-browser-friendly formats to MP3.
+	// .webm: often lacks proper duration metadata from browser MediaRecorder.
+	// .m4a: may contain ALAC (Apple Lossless) codec which browsers cannot decode.
+	// .ogg/.flac/.aac: not universally supported across browsers.
+	// Converting to MP3 ensures universal browser playback compatibility.
+	extLower := strings.ToLower(filepath.Ext(filePath))
+	needsConversion := extLower == ".webm" || extLower == ".m4a" || extLower == ".ogg" || extLower == ".flac" || extLower == ".aac"
+	if needsConversion {
 		// Generate MP3 path
 		mp3Path := strings.TrimSuffix(filePath, filepath.Ext(filePath)) + ".mp3"
 
@@ -293,11 +297,11 @@ func (h *Handler) UploadAudio(c *gin.Context) {
 		cmd := exec.Command("ffmpeg", "-i", filePath, "-vn", "-af", "loudnorm", "-acodec", "libmp3lame", "-b:a", "320k", mp3Path)
 		if err := cmd.Run(); err != nil {
 			_ = h.fileService.RemoveFile(filePath)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to convert WebM audio to MP3"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to convert %s audio to MP3", extLower)})
 			return
 		}
 
-		// Delete original .webm file
+		// Delete original file
 		_ = h.fileService.RemoveFile(filePath)
 
 		// Update filePath to point to the MP3
@@ -717,6 +721,20 @@ func (h *Handler) SubmitJob(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
 		return
+	}
+
+	// Convert non-browser-friendly formats to MP3 for playback compatibility
+	submitExtLower := strings.ToLower(filepath.Ext(filePath))
+	if submitExtLower == ".webm" || submitExtLower == ".m4a" || submitExtLower == ".ogg" || submitExtLower == ".flac" || submitExtLower == ".aac" {
+		mp3Path := strings.TrimSuffix(filePath, filepath.Ext(filePath)) + ".mp3"
+		cmd := exec.Command("ffmpeg", "-i", filePath, "-vn", "-af", "loudnorm", "-acodec", "libmp3lame", "-b:a", "320k", mp3Path)
+		if err := cmd.Run(); err != nil {
+			_ = h.fileService.RemoveFile(filePath)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to convert %s audio to MP3", submitExtLower)})
+			return
+		}
+		_ = h.fileService.RemoveFile(filePath)
+		filePath = mp3Path
 	}
 
 	// Generate job ID from filename
@@ -1453,8 +1471,31 @@ func (h *Handler) GetAudioFile(c *gin.Context) {
 
 	fmt.Printf("DEBUG: Audio file exists, serving: %s\n", audioPath)
 
+	// For non-browser-friendly formats (.m4a with ALAC, .ogg, .flac, .aac),
+	// lazily convert to MP3 on first access. This handles files uploaded before
+	// the upload-time conversion was added.
+	ext := strings.ToLower(filepath.Ext(audioPath))
+	if ext == ".m4a" || ext == ".ogg" || ext == ".flac" || ext == ".aac" {
+		mp3Path := strings.TrimSuffix(audioPath, filepath.Ext(audioPath)) + ".mp3"
+		if _, err := os.Stat(mp3Path); os.IsNotExist(err) {
+			// Convert to MP3 using FFmpeg
+			fmt.Printf("DEBUG: Converting %s to MP3 for browser playback: %s\n", ext, mp3Path)
+			cmd := exec.Command("ffmpeg", "-i", audioPath, "-vn", "-acodec", "libmp3lame", "-b:a", "320k", mp3Path)
+			if err := cmd.Run(); err != nil {
+				fmt.Printf("ERROR: FFmpeg conversion failed: %v\n", err)
+				// Fall through to serve original file as fallback
+			} else {
+				audioPath = mp3Path
+				ext = ".mp3"
+			}
+		} else {
+			// MP3 already exists from a previous conversion
+			audioPath = mp3Path
+			ext = ".mp3"
+		}
+	}
+
 	// Set appropriate content type based on file extension
-	ext := filepath.Ext(job.AudioPath)
 	switch ext {
 	case ".mp3":
 		c.Header("Content-Type", "audio/mpeg")

@@ -29,9 +29,11 @@ const (
 	ModelSortformer      = "sortformer"
 	ModelOpenAI          = "openai_whisper"
 	ModelVoxtral         = "voxtral"
+	ModelParakeetMLX     = "parakeet_mlx"
 	ModelDiarization31   = "pyannote/speaker-diarization-3.1"
 	FamilyNvidiaCanary   = "nvidia_canary"
 	FamilyNvidiaParakeet = "nvidia_parakeet"
+	FamilyParakeetMLX    = "parakeet_mlx"
 	FamilyWhisper        = "whisper"
 	FamilyOpenAI         = "openai"
 	FamilyMistralVoxtral = "mistral_voxtral"
@@ -329,6 +331,11 @@ func (u *UnifiedTranscriptionService) processSingleTrackJob(ctx context.Context,
 		}
 	}
 
+	// Post-process: apply dictionary corrections
+	if transcriptResult != nil {
+		transcriptResult = u.applyPostProcessing(ctx, transcriptResult, transcriptionModelID)
+	}
+
 	// Save results to database
 	if transcriptResult != nil {
 		if err := u.saveTranscriptionResults(job.ID, transcriptResult); err != nil {
@@ -379,6 +386,8 @@ func (u *UnifiedTranscriptionService) selectModels(params models.WhisperXParams)
 	switch params.ModelFamily {
 	case FamilyNvidiaParakeet:
 		transcriptionModelID = ModelParakeet
+	case FamilyParakeetMLX:
+		transcriptionModelID = ModelParakeetMLX
 	case FamilyNvidiaCanary:
 		transcriptionModelID = ModelCanary
 	case FamilyWhisper:
@@ -553,6 +562,8 @@ func (u *UnifiedTranscriptionService) convertParametersForModel(params models.Wh
 	switch modelID {
 	case ModelParakeet:
 		return u.convertToParakeetParams(params)
+	case ModelParakeetMLX:
+		return u.convertToParakeetMLXParams(params)
 	case ModelCanary:
 		return u.convertToCanaryParams(params)
 	case ModelWhisperX:
@@ -623,6 +634,15 @@ func (u *UnifiedTranscriptionService) convertToParakeetParams(params models.Whis
 	}
 }
 
+// convertToParakeetMLXParams converts to Parakeet MLX-specific parameters
+func (u *UnifiedTranscriptionService) convertToParakeetMLXParams(params models.WhisperXParams) map[string]interface{} {
+	return map[string]interface{}{
+		"timestamps":         true,
+		"output_format":      OutputFormatJSON,
+		"auto_convert_audio": true,
+	}
+}
+
 // convertToCanaryParams converts to Canary-specific parameters
 func (u *UnifiedTranscriptionService) convertToCanaryParams(params models.WhisperXParams) map[string]interface{} {
 	paramMap := map[string]interface{}{
@@ -639,9 +659,12 @@ func (u *UnifiedTranscriptionService) convertToCanaryParams(params models.Whispe
 		paramMap["source_lang"] = "en"
 	}
 
-	// Set target language for translation
+	// Set target language
 	if params.Task == "translate" {
 		paramMap["target_lang"] = "en"
+	} else {
+		// For transcription, target_lang must match source_lang
+		paramMap["target_lang"] = paramMap["source_lang"]
 	}
 
 	return paramMap
@@ -822,27 +845,19 @@ func (u *UnifiedTranscriptionService) parametersToMap(params models.WhisperXPara
 	return paramMap
 }
 
-// mergeDiarizationWithTranscription combines diarization results with transcription
+// mergeDiarizationWithTranscription combines diarization results with transcription.
+// It assigns speakers at the WORD level, then rebuilds segments by splitting at
+// speaker boundaries. This produces fine-grained segments where each has a single
+// accurate speaker, instead of assigning one speaker to large coarse segments.
 func (u *UnifiedTranscriptionService) mergeDiarizationWithTranscription(transcript *interfaces.TranscriptResult, diarization *interfaces.DiarizationResult) *interfaces.TranscriptResult {
 	logger.Info("Merging diarization with transcription",
 		"transcript_segments", len(transcript.Segments),
+		"transcript_words", len(transcript.WordSegments),
 		"diarization_segments", len(diarization.Segments))
 
-	// Create a copy of the transcript to avoid modifying the original
 	mergedTranscript := *transcript
-	mergedTranscript.Segments = make([]interfaces.TranscriptSegment, len(transcript.Segments))
-	copy(mergedTranscript.Segments, transcript.Segments)
 
-	// Assign speakers to transcript segments based on timing overlap
-	for i := range mergedTranscript.Segments {
-		segment := &mergedTranscript.Segments[i]
-		bestSpeaker := u.findBestSpeakerForSegment(segment.Start, segment.End, diarization.Segments)
-		if bestSpeaker != "" {
-			segment.Speaker = &bestSpeaker
-		}
-	}
-
-	// Also assign speakers to words if available
+	// Step 1: Assign speakers to every word
 	if len(transcript.WordSegments) > 0 {
 		mergedTranscript.WordSegments = make([]interfaces.TranscriptWord, len(transcript.WordSegments))
 		copy(mergedTranscript.WordSegments, transcript.WordSegments)
@@ -854,9 +869,83 @@ func (u *UnifiedTranscriptionService) mergeDiarizationWithTranscription(transcri
 				word.Speaker = &bestSpeaker
 			}
 		}
+
+		// Step 2: Rebuild segments from words — split at speaker boundaries
+		mergedTranscript.Segments = u.buildSegmentsFromWords(mergedTranscript.WordSegments)
+
+		logger.Info("Rebuilt segments from word-level speakers",
+			"original_segments", len(transcript.Segments),
+			"new_segments", len(mergedTranscript.Segments))
+	} else {
+		// Fallback: no word segments, assign speakers to original segments
+		mergedTranscript.Segments = make([]interfaces.TranscriptSegment, len(transcript.Segments))
+		copy(mergedTranscript.Segments, transcript.Segments)
+
+		for i := range mergedTranscript.Segments {
+			segment := &mergedTranscript.Segments[i]
+			bestSpeaker := u.findBestSpeakerForSegment(segment.Start, segment.End, diarization.Segments)
+			if bestSpeaker != "" {
+				segment.Speaker = &bestSpeaker
+			}
+		}
 	}
 
 	return &mergedTranscript
+}
+
+// buildSegmentsFromWords creates segments by grouping consecutive words with the same speaker.
+func (u *UnifiedTranscriptionService) buildSegmentsFromWords(words []interfaces.TranscriptWord) []interfaces.TranscriptSegment {
+	if len(words) == 0 {
+		return nil
+	}
+
+	var segments []interfaces.TranscriptSegment
+	currentSpeaker := wordSpeaker(words[0])
+	segStart := 0
+
+	for i := 1; i < len(words); i++ {
+		speaker := wordSpeaker(words[i])
+		if speaker != currentSpeaker {
+			// Flush current segment
+			segments = append(segments, u.makeSegmentFromWords(words[segStart:i], currentSpeaker))
+			currentSpeaker = speaker
+			segStart = i
+		}
+	}
+	// Flush last segment
+	segments = append(segments, u.makeSegmentFromWords(words[segStart:], currentSpeaker))
+
+	return segments
+}
+
+// makeSegmentFromWords builds a TranscriptSegment from a slice of words.
+func (u *UnifiedTranscriptionService) makeSegmentFromWords(words []interfaces.TranscriptWord, speaker string) interfaces.TranscriptSegment {
+	var text strings.Builder
+	for i, w := range words {
+		if i > 0 {
+			text.WriteString(" ")
+		}
+		text.WriteString(w.Word)
+	}
+
+	seg := interfaces.TranscriptSegment{
+		Start: words[0].Start,
+		End:   words[len(words)-1].End,
+		Text:  text.String(),
+	}
+	if speaker != "" {
+		s := speaker
+		seg.Speaker = &s
+	}
+	return seg
+}
+
+// wordSpeaker returns the speaker string for a word, or "" if nil.
+func wordSpeaker(w interfaces.TranscriptWord) string {
+	if w.Speaker != nil {
+		return *w.Speaker
+	}
+	return ""
 }
 
 // findBestSpeakerForSegment finds the speaker with maximum overlap for a given time segment
@@ -877,6 +966,76 @@ func (u *UnifiedTranscriptionService) findBestSpeakerForSegment(start, end float
 	}
 
 	return bestSpeaker
+}
+
+// applyPostProcessing runs postprocess.py clean-json on the transcript result.
+// It applies dictionary-based corrections to text, segments, and words.
+// Non-fatal: if postprocessing fails, the original result is returned unchanged.
+func (u *UnifiedTranscriptionService) applyPostProcessing(ctx context.Context, result *interfaces.TranscriptResult, modelUsed string) *interfaces.TranscriptResult {
+	// Find postprocess.py next to the scriberr binary
+	execPath, err := os.Executable()
+	if err != nil {
+		logger.Warn("Postprocess: cannot determine executable path", "error", err)
+		return result
+	}
+	scriptPath := filepath.Join(filepath.Dir(execPath), "postprocess.py")
+	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
+		logger.Debug("Postprocess: script not found, skipping", "path", scriptPath)
+		return result
+	}
+
+	// Build input JSON: the transcript + model hint
+	type postprocessInput struct {
+		Text         string                     `json:"text"`
+		Segments     []interfaces.TranscriptSegment `json:"segments"`
+		WordSegments []interfaces.TranscriptWord    `json:"word_segments"`
+		Model        string                     `json:"model"`
+	}
+	input := postprocessInput{
+		Text:         result.Text,
+		Segments:     result.Segments,
+		WordSegments: result.WordSegments,
+		Model:        modelUsed,
+	}
+	inputJSON, err := json.Marshal(input)
+	if err != nil {
+		logger.Warn("Postprocess: failed to marshal input", "error", err)
+		return result
+	}
+
+	cmd := exec.CommandContext(ctx, "python3", scriptPath, "clean-json")
+	cmd.Stdin = strings.NewReader(string(inputJSON))
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		logger.Warn("Postprocess: script failed", "error", err, "stderr", stderr.String())
+		return result
+	}
+
+	if stderr.Len() > 0 {
+		logger.Info("Postprocess", "log", strings.TrimSpace(stderr.String()))
+	}
+
+	// Parse output
+	var output postprocessInput
+	if err := json.Unmarshal([]byte(stdout.String()), &output); err != nil {
+		logger.Warn("Postprocess: failed to parse output", "error", err)
+		return result
+	}
+
+	// Apply corrections back to result
+	corrected := *result
+	corrected.Text = output.Text
+	if len(output.Segments) > 0 {
+		corrected.Segments = output.Segments
+	}
+	if len(output.WordSegments) > 0 {
+		corrected.WordSegments = output.WordSegments
+	}
+
+	return &corrected
 }
 
 // saveTranscriptionResults saves the transcription results to the database

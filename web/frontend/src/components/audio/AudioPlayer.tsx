@@ -60,7 +60,8 @@ export const AudioPlayer = forwardRef<AudioPlayerRef, AudioPlayerProps>(({
                 setError(null);
                 setLoadingProgress(0);
 
-                const audioUrl = `/api/v1/transcription/${audioId}/audio`;
+                const token = (await import('@/features/auth/store/authStore')).useAuthStore.getState().token;
+                const audioUrl = `/api/v1/transcription/${audioId}/audio${token ? `?token=${token}` : ''}`;
 
                 const isDark = theme === 'dark';
 

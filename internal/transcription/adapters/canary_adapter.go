@@ -34,8 +34,9 @@ func NewCanaryAdapter(envPath string) *CanaryAdapter {
 		Description: "NVIDIA's multilingual Canary model with translation capabilities",
 		Version:     "1.2.0",
 		SupportedLanguages: []string{
-			"en", "de", "es", "fr", "hi", "it", "ja", "ko", "pl", "pt", "ru", "zh",
-			// Canary supports many more languages
+			"be", "bg", "cs", "da", "de", "el", "en", "es", "fi", "fr",
+			"he", "hi", "hr", "hu", "it", "ja", "ko", "nl", "no", "pl",
+			"pt", "ro", "ru", "sk", "sl", "sv", "uk", "zh",
 		},
 		SupportedFormats:  []string{"wav", "flac"},
 		RequiresGPU:       false, // Can run on CPU but GPU strongly recommended
@@ -66,7 +67,7 @@ func NewCanaryAdapter(envPath string) *CanaryAdapter {
 			Type:        "string",
 			Required:    false,
 			Default:     "en",
-			Options:     []string{"en", "de", "es", "fr", "hi", "it", "ja", "ko", "pl", "pt", "ru", "zh"},
+			Options:     []string{"be", "bg", "cs", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "hr", "hu", "it", "ja", "ko", "nl", "no", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "uk", "zh"},
 			Description: "Source language of the audio",
 			Group:       "basic",
 		},
@@ -75,7 +76,7 @@ func NewCanaryAdapter(envPath string) *CanaryAdapter {
 			Type:        "string",
 			Required:    false,
 			Default:     "en",
-			Options:     []string{"en", "de", "es", "fr", "hi", "it", "ja", "ko", "pl", "pt", "ru", "zh"},
+			Options:     []string{"be", "bg", "cs", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "hr", "hu", "it", "ja", "ko", "nl", "no", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "uk", "zh"},
 			Description: "Target language for transcription/translation",
 			Group:       "basic",
 		},

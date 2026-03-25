@@ -141,12 +141,12 @@ def main():
     parser.add_argument("audio_file", help="Path to audio file")
     parser.add_argument(
         "--source-lang", default="en",
-        choices=["en", "de", "es", "fr", "hi", "it", "ja", "ko", "pl", "pt", "ru", "zh"],
+        choices=["be", "bg", "cs", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "hr", "hu", "it", "ja", "ko", "nl", "no", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "uk", "zh"],
         help="Source language (default: en)"
     )
     parser.add_argument(
         "--target-lang", default="en",
-        choices=["en", "de", "es", "fr", "hi", "it", "ja", "ko", "pl", "pt", "ru", "zh"],
+        choices=["be", "bg", "cs", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "hr", "hu", "it", "ja", "ko", "nl", "no", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "uk", "zh"],
         help="Target language (default: en)"
     )
     parser.add_argument(

@@ -247,10 +247,56 @@ export const TranscriptView = forwardRef<HTMLDivElement, TranscriptViewProps>(({
         );
     }
 
+    // Check if any segment has speaker diarization data
+    const hasSpeakers = useMemo(() => {
+        return transcript?.segments?.some(seg => seg.speaker) ?? false;
+    }, [transcript]);
+
     // Render transcript with word-level highlighting for compact view
     const renderCompactView = () => {
         if (!transcript.word_segments || transcript.word_segments.length === 0) {
             return <p className="text-lg leading-relaxed text-carbon-700 dark:text-carbon-300 whitespace-pre-wrap">{transcript.text}</p>;
+        }
+
+        // When speakers are present, render with inline speaker labels using segments
+        // (Cannot use the single-text-node karaoke approach because speaker labels need separate elements)
+        if (hasSpeakers && transcript.segments && transcript.segments.length > 0) {
+            return (
+                <div
+                    className={cn(
+                        "text-lg leading-relaxed text-carbon-700 dark:text-carbon-300 whitespace-pre-wrap font-reading selection:bg-orange-500/30 transition-colors duration-200 select-text",
+                        isDesktop && isModifierPressed ? 'cursor-pointer hover:text-carbon-900 dark:hover:text-carbon-100' : 'cursor-text'
+                    )}
+                    style={{
+                        WebkitUserSelect: 'text',
+                        userSelect: 'text',
+                        WebkitTapHighlightColor: 'transparent',
+                        touchAction: 'pan-y pinch-zoom',
+                        WebkitTouchCallout: 'default'
+                    }}
+                    data-transcript-text
+                >
+                    {transcript.segments.map((segment, i) => {
+                        const prevSpeaker = i > 0 ? transcript.segments![i - 1].speaker : null;
+                        const showSpeaker = segment.speaker && segment.speaker !== prevSpeaker;
+                        return (
+                            <span key={i}>
+                                {showSpeaker && (
+                                    <>
+                                        {i > 0 && '\n\n'}
+                                        <span className="font-semibold text-sm text-carbon-500 dark:text-carbon-400">
+                                            {getDisplaySpeakerName(segment.speaker!)}:
+                                        </span>
+                                        {' '}
+                                    </>
+                                )}
+                                {segment.text}
+                                {' '}
+                            </span>
+                        );
+                    })}
+                </div>
+            );
         }
 
         return (

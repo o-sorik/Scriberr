@@ -63,6 +63,14 @@ export const AudioDetailView = function AudioDetailView({ audioId: propAudioId }
     const { data: transcript } = useTranscript(audioId || "", true);
     const { data: speakerMappings = {} } = useSpeakerMappings(audioId || "", true);
 
+    // Auto-switch to expanded (Timeline) view when diarization speakers are detected
+    // This ensures speaker labels are visible by default instead of showing a flat text block
+    useEffect(() => {
+        if (transcript?.segments?.some(seg => seg.speaker)) {
+            setTranscriptMode("expanded");
+        }
+    }, [transcript]);
+
     // Download Logic
     const { downloadSRT } = useTranscriptDownload();
 

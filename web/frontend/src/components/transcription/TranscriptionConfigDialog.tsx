@@ -211,9 +211,7 @@ const LANGUAGES = [
 
 const CANARY_LANGUAGES = [
     { value: "en", label: "English" },
-    { value: "de", label: "German" },
-    { value: "es", label: "Spanish" },
-    { value: "fr", label: "French" },
+    { value: "uk", label: "Ukrainian" },
 ];
 
 const PARAM_DESCRIPTIONS = {
@@ -424,6 +422,9 @@ export const TranscriptionConfigDialog = memo(function TranscriptionConfigDialog
                                 <SelectItem value="mistral_voxtral" className={selectItemClassName}>
                                     Mistral Voxtral
                                 </SelectItem>
+                                <SelectItem value="parakeet_mlx" className={selectItemClassName}>
+                                    Parakeet MLX (Apple Silicon)
+                                </SelectItem>
                                 <SelectItem value="openai" className={selectItemClassName}>
                                     OpenAI
                                 </SelectItem>
@@ -473,6 +474,10 @@ export const TranscriptionConfigDialog = memo(function TranscriptionConfigDialog
                             availableModels={availableModels}
                             onValidate={validateAPIKey}
                         />
+                    )}
+
+                    {params.model_family === "parakeet_mlx" && (
+                        <ParakeetMLXConfig params={params} updateParam={updateParam} isMultiTrack={isMultiTrack} />
                     )}
 
                     {params.model_family === "mistral_voxtral" && (
@@ -769,6 +774,75 @@ function WhisperConfig({ params, updateParam, isMultiTrack }: ConfigProps) {
                     </AccordionContent>
                 </AccordionItem>
             </Accordion>
+        </div>
+    );
+}
+
+function ParakeetMLXConfig({ params, updateParam, isMultiTrack }: ConfigProps) {
+    return (
+        <div className="space-y-6">
+            <InfoBanner variant="info" title="Parakeet MLX — Apple Silicon">
+                Ultra-fast transcription (~50x realtime) using the MLX framework on Apple Silicon.
+                Supports 25+ languages with automatic language detection. No GPU required — runs on
+                the Apple Neural Engine. The model will be downloaded automatically on first use (~1.2 GB).
+            </InfoBanner>
+
+            {/* Speaker Diarization */}
+            {!isMultiTrack && (
+                <Section title="Speaker Diarization" description="Identify and separate different speakers in the audio">
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-3">
+                            <Switch
+                                id="mlx_diarize"
+                                checked={params.diarize}
+                                onCheckedChange={(v) => updateParam('diarize', v)}
+                            />
+                            <label htmlFor="mlx_diarize" className="text-sm text-[var(--text-primary)] cursor-pointer">
+                                Enable speaker identification
+                            </label>
+                        </div>
+
+                        {params.diarize && (
+                            <div className="p-4 bg-[var(--bg-main)] rounded-xl border border-[var(--border-subtle)] space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <FormField label="Min Speakers" optional>
+                                        <Input
+                                            type="number"
+                                            min={1}
+                                            max={20}
+                                            placeholder="Auto"
+                                            value={params.min_speakers || ""}
+                                            onChange={(e) => updateParam('min_speakers', e.target.value ? parseInt(e.target.value) : undefined)}
+                                            className={inputClassName}
+                                        />
+                                    </FormField>
+                                    <FormField label="Max Speakers" optional>
+                                        <Input
+                                            type="number"
+                                            min={1}
+                                            max={20}
+                                            placeholder="Auto"
+                                            value={params.max_speakers || ""}
+                                            onChange={(e) => updateParam('max_speakers', e.target.value ? parseInt(e.target.value) : undefined)}
+                                            className={inputClassName}
+                                        />
+                                    </FormField>
+                                </div>
+
+                                <FormField label="Hugging Face Token" description={PARAM_DESCRIPTIONS.hf_token}>
+                                    <Input
+                                        type="password"
+                                        placeholder="hf_..."
+                                        value={params.hf_token || ""}
+                                        onChange={(e) => updateParam('hf_token', e.target.value || undefined)}
+                                        className={inputClassName}
+                                    />
+                                </FormField>
+                            </div>
+                        )}
+                    </div>
+                </Section>
+            )}
         </div>
     );
 }

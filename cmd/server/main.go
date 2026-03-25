@@ -237,6 +237,8 @@ func registerAdapters(cfg *config.Config) {
 		adapters.NewCanaryAdapter(nvidiaEnvPath)) // Shares with Parakeet
 	registry.RegisterTranscriptionAdapter("voxtral",
 		adapters.NewVoxtralAdapter(voxtralEnvPath))
+	registry.RegisterTranscriptionAdapter("parakeet_mlx",
+		adapters.NewParakeetMLXAdapter(nvidiaEnvPath))
 	registry.RegisterTranscriptionAdapter("openai_whisper",
 		adapters.NewOpenAIAdapter(cfg.OpenAIAPIKey))
 
