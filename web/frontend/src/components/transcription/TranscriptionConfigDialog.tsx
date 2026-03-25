@@ -120,7 +120,7 @@ const DEFAULT_PARAMS: WhisperXParams = {
     vad_offset: 0.363,
     chunk_size: 30,
     diarize: false,
-    diarize_model: "pyannote",
+    diarize_model: "foxnose",
     speaker_embeddings: false,
     temperature: 0,
     best_of: 5,
@@ -222,7 +222,7 @@ const PARAM_DESCRIPTIONS = {
     compute_type: "Float16 (faster), Float32 (accurate), Int8 (fastest).",
     batch_size: "Segments processed at once. Higher = faster but more memory.",
     diarize: "Identify and separate different speakers.",
-    diarize_model: "Pyannote (accurate, needs HF token) or NVIDIA Sortformer (up to 4 speakers).",
+    diarize_model: "FoxNose (fast, no token), Pyannote (accurate, needs HF token), or NVIDIA Sortformer (up to 4 speakers).",
     temperature: "0 = deterministic, higher = more creative.",
     beam_size: "Search beams. Higher = better quality but slower.",
     vad_method: "Voice detection: Pyannote (accurate) or Silero (fast).",
@@ -304,7 +304,7 @@ export const TranscriptionConfigDialog = memo(function TranscriptionConfigDialog
         setParams(prev => {
             const newParams = { ...prev, [key]: value };
             if (key === 'model_family' && value === 'whisper') {
-                newParams.diarize_model = 'pyannote';
+                newParams.diarize_model = 'foxnose';
             }
             return newParams;
         });
@@ -914,7 +914,8 @@ function ParakeetConfig({ params, updateParam, isMultiTrack }: ConfigProps) {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent className={selectContentClassName}>
-                                            <SelectItem value="pyannote" className={selectItemClassName}>Pyannote</SelectItem>
+                                            <SelectItem value="foxnose" className={selectItemClassName}>FoxNose (fast, no token)</SelectItem>
+                                            <SelectItem value="pyannote" className={selectItemClassName}>Pyannote (accurate, needs HF token)</SelectItem>
                                             <SelectItem value="nvidia_sortformer" className={selectItemClassName}>NVIDIA Sortformer</SelectItem>
                                         </SelectContent>
                                     </Select>
@@ -1036,7 +1037,8 @@ function CanaryConfig({ params, updateParam, isMultiTrack }: ConfigProps) {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent className={selectContentClassName}>
-                                            <SelectItem value="pyannote" className={selectItemClassName}>Pyannote</SelectItem>
+                                            <SelectItem value="foxnose" className={selectItemClassName}>FoxNose (fast, no token)</SelectItem>
+                                            <SelectItem value="pyannote" className={selectItemClassName}>Pyannote (accurate, needs HF token)</SelectItem>
                                             <SelectItem value="nvidia_sortformer" className={selectItemClassName}>NVIDIA Sortformer</SelectItem>
                                         </SelectContent>
                                     </Select>

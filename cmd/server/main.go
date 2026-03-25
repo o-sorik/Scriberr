@@ -247,6 +247,8 @@ func registerAdapters(cfg *config.Config) {
 		adapters.NewPyAnnoteAdapter(pyannoteEnvPath)) // Dedicated environment
 	registry.RegisterDiarizationAdapter("sortformer",
 		adapters.NewSortformerAdapter(nvidiaEnvPath)) // Shares with Parakeet
+	registry.RegisterDiarizationAdapter("foxnose",
+		adapters.NewFoxNoseAdapter(nvidiaEnvPath)) // Uses asr-env, fast diarization
 
 	logger.Info("Adapter registration complete")
 }

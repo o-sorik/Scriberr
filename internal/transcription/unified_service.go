@@ -37,7 +37,9 @@ const (
 	FamilyWhisper        = "whisper"
 	FamilyOpenAI         = "openai"
 	FamilyMistralVoxtral = "mistral_voxtral"
+	ModelFoxNose         = "foxnose"
 	DiarizeSortformer    = "nvidia_sortformer"
+	DiarizeFoxNose       = "foxnose"
 	OutputFormatJSON     = "json"
 )
 
@@ -406,10 +408,12 @@ func (u *UnifiedTranscriptionService) selectModels(params models.WhisperXParams)
 		switch params.DiarizeModel {
 		case DiarizeSortformer:
 			diarizationModelID = ModelSortformer
+		case DiarizeFoxNose:
+			diarizationModelID = ModelFoxNose
 		case ModelPyannote, ModelDiarization31:
 			diarizationModelID = ModelPyannote
 		default:
-			diarizationModelID = ModelPyannote // Default fallback
+			diarizationModelID = ModelFoxNose // Default: foxnose (fast, no HF token)
 		}
 	}
 
@@ -571,6 +575,8 @@ func (u *UnifiedTranscriptionService) convertParametersForModel(params models.Wh
 		return u.convertToWhisperXParams(params)
 	case ModelPyannote:
 		return u.convertToPyannoteParams(params)
+	case ModelFoxNose:
+		return u.convertToFoxNoseParams(params)
 	case ModelSortformer:
 		return u.convertToSortformerParams(params)
 	case ModelOpenAI:
@@ -756,6 +762,22 @@ func (u *UnifiedTranscriptionService) convertToPyannoteParams(params models.Whis
 	}
 	if params.VadOffset > 0 {
 		paramMap["segmentation_offset"] = params.VadOffset
+	}
+
+	return paramMap
+}
+
+// convertToFoxNoseParams converts to FoxNose-specific parameters
+func (u *UnifiedTranscriptionService) convertToFoxNoseParams(params models.WhisperXParams) map[string]interface{} {
+	paramMap := map[string]interface{}{
+		"output_format": OutputFormatJSON,
+	}
+
+	if params.MinSpeakers != nil {
+		paramMap["min_speakers"] = *params.MinSpeakers
+	}
+	if params.MaxSpeakers != nil {
+		paramMap["max_speakers"] = *params.MaxSpeakers
 	}
 
 	return paramMap
