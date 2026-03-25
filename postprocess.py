@@ -13,11 +13,15 @@ Usage:
     # Show dictionary stats
     python postprocess.py stats
 """
+from __future__ import annotations
+
 import argparse
 import json
 import os
 import re
 import sys
+import urllib.request
+import urllib.error
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -302,6 +306,133 @@ def cmd_clean_json(args):
     json.dump(data, sys.stdout, ensure_ascii=False)
 
 
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
+
+LLM_SYSTEM_PROMPT = """Ти — коректор українських транскрипцій робочих мітингів. Тобі дано транскрипт з ASR з помилками розпізнавання.
+
+Виправляй ТІЛЬКИ помилки розпізнавання:
+- Неправильно розпізнані слова (наприклад: геймерит→гаймерит, обзвів→обдзвонив, ворогом→горлом)
+- Злиті або розбиті слова
+- Абракадабру яка має бути реальним словом — вгадай з контексту
+
+НЕ змінюй:
+- Таймстемпи [X:XX]
+- Імена спікерів
+- Розмовний стиль і слова-паразити (типу, коротше, ну)
+- Правильно розпізнані слова
+
+Поверни ТІЛЬКИ виправлений транскрипт, без коментарів і пояснень."""
+
+
+def call_ollama(prompt: str, system: str = LLM_SYSTEM_PROMPT, model: str = OLLAMA_MODEL) -> str | None:
+    """Call Ollama API. Returns response text or None on failure."""
+    payload = json.dumps({
+        "model": model,
+        "system": system,
+        "prompt": prompt,
+        "stream": False,
+        "options": {"temperature": 0.1, "num_predict": 8192},
+    }).encode()
+
+    req = urllib.request.Request(
+        f"{OLLAMA_URL}/api/generate",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=300) as resp:
+            result = json.loads(resp.read())
+            return result.get("response", "")
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
+        print(f"Ollama error: {e}", file=sys.stderr)
+        return None
+
+
+def llm_correct_segments(segments: list[dict]) -> list[dict]:
+    """Send segments to Ollama for contextual correction. Returns corrected segments."""
+    if not segments:
+        return segments
+
+    # Build formatted text from segments
+    lines = []
+    for seg in segments:
+        speaker = seg.get("speaker", "")
+        ts = seg.get("start", 0)
+        mins = int(ts) // 60
+        secs = int(ts) % 60
+        prefix = f"[{mins}:{secs:02d}]"
+        if speaker:
+            prefix += f" {speaker}:"
+        lines.append(f"{prefix} {seg.get('text', '')}")
+
+    formatted = "\n".join(lines)
+
+    # Call Ollama
+    corrected_text = call_ollama(formatted)
+    if not corrected_text:
+        return segments
+
+    # Parse corrected lines back into segments
+    corrected_lines = [l.strip() for l in corrected_text.strip().split("\n") if l.strip()]
+
+    # Match corrected lines back to segments by index
+    # (LLM should preserve same number of lines)
+    if len(corrected_lines) != len(segments):
+        print(f"LLM returned {len(corrected_lines)} lines vs {len(segments)} segments — "
+              f"falling back to original", file=sys.stderr)
+        return segments
+
+    corrected_segments = []
+    for seg, line in zip(segments, corrected_lines):
+        new_seg = dict(seg)
+        # Strip timestamp and speaker prefix to get just the text
+        text = re.sub(r'^\[\d+:\d+\]\s*(?:\S+:)?\s*', '', line)
+        new_seg["text"] = text
+        corrected_segments.append(new_seg)
+
+    return corrected_segments
+
+
+def cmd_llm_clean_json(args):
+    """Apply LLM (Ollama) corrections to a JSON transcript (stdin/stdout).
+
+    Reads the same JSON format as clean-json. Sends segments to Ollama for
+    contextual correction, then rebuilds text and word segments.
+    """
+    data = json.load(sys.stdin)
+
+    segments = data.get("segments", [])
+    if not segments:
+        print("LLM postprocess: no segments, skipping", file=sys.stderr)
+        json.dump(data, sys.stdout, ensure_ascii=False)
+        return
+
+    # Check Ollama availability
+    try:
+        urllib.request.urlopen(f"{OLLAMA_URL}/api/tags", timeout=3)
+    except (urllib.error.URLError, TimeoutError):
+        print("LLM postprocess: Ollama not available, skipping", file=sys.stderr)
+        json.dump(data, sys.stdout, ensure_ascii=False)
+        return
+
+    print(f"LLM postprocess: sending {len(segments)} segments to {OLLAMA_MODEL}...", file=sys.stderr)
+
+    corrected = llm_correct_segments(segments)
+
+    # Count changes
+    changes = sum(1 for s, c in zip(segments, corrected) if s.get("text") != c.get("text"))
+
+    # Update segments
+    data["segments"] = corrected
+
+    # Rebuild top-level text from corrected segments
+    data["text"] = " ".join(seg.get("text", "") for seg in corrected)
+
+    print(f"LLM postprocess: {changes} segments corrected by {OLLAMA_MODEL}", file=sys.stderr)
+    json.dump(data, sys.stdout, ensure_ascii=False)
+
+
 def cmd_diff(args):
     """Diff raw vs corrected to learn new patterns."""
     new_patterns = diff_transcripts(args.raw, args.corrected, args.dictionary)
@@ -365,6 +496,9 @@ def main():
     # clean-json command (for Scriberr integration, stdin/stdout)
     subparsers.add_parser("clean-json", help="Apply dictionary to JSON transcript (stdin→stdout)")
 
+    # llm-clean-json command (Ollama LLM correction, stdin/stdout)
+    subparsers.add_parser("llm-clean-json", help="Apply LLM corrections via Ollama (stdin→stdout)")
+
     # stats command
     subparsers.add_parser("stats", help="Show dictionary statistics")
 
@@ -374,6 +508,8 @@ def main():
         cmd_clean(args)
     elif args.command == "clean-json":
         cmd_clean_json(args)
+    elif args.command == "llm-clean-json":
+        cmd_llm_clean_json(args)
     elif args.command == "diff":
         cmd_diff(args)
     elif args.command == "stats":

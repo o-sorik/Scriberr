@@ -18,6 +18,10 @@ Each entry: `raw_term | correct_term | context_hint | model`
 обімат | BMAD | | both
 Бейсу | base | | both
 безсу | base | | canary
+геймеритом | гаймеритом | | both
+геймерит | гаймерит | | both
+гейморетивно | гайморетивно | | both
+ГМР | гайморитом | | both
 кодегенератор | code generator | | parakeet_mlx
 кодегенератора | code generator | | both
 деплой | deploy | | both
@@ -38,19 +42,54 @@ Each entry: `raw_term | correct_term | context_hint | model`
 фалбеків | fallbacks | | both
 скіл | skill | agent context | both
 скріпт | script | | both
+нежи | нежить | | both
+улиця | вулиця | | both
+ренхен | рентген | | both
+Сурі | Сорі | | both
+молода | молодець | | both
+Сіди | Сяді | | both
+реалізами | релізами | | both
+файлів | фейлів | sales/fail context | both
+Рінкедин | Лінкедин | | both
+LOR | ЛОР | | both
+КПС | капець | | both
+скрипав | скрейпав | web context | both
+скриптипт | скрипт | | both
+ап-ключ | апі-ключ | | both
+фалбеків | фолбеків | | both
+клот | Claude | | both
+ассенд | ассесменту | architecture context | both
+інфумента | імпрувменту | | both
+сфестифікована | софістикейтед | | both
+стрітфор | стрейтфор | | both
+скаювати | скейлити | | both
+сотлери | thought leaders | | both
+Фрам | промпт | | both
+хабає | хапає | | both
 ```
 
 ## Company & Product Names
 ```
 Софтджорн | Softjourn | | both
+Spectric | Spectrix | | both
+Статрікс | Спектрікс | | both
+спектрів | спектрікс | | both
 Сіневе | Cinewave | | both
 Сіневеїв | Cinewave | | both
 Сіновеєва | Cinewave | | both
 Навейво | Cinewave | | parakeet_mlx
 Паксом | PAX | | both
 Пакс | PAX | | both
-припайт | Paypod | | both
-припайд | Paypod | | both
+припайт | Prepaid | | both
+припайд | Prepaid | | both
+припайдіть | Prepaid | | both
+припайдами | Prepaid | | both
+пакст | PEX | | both
+PAX | PEX | | both
+Texails | Tech Sales | | both
+Upsideal | Upsale | | both
+sluishens | solutions | | both
+Івен Брайт | Event Brite | | both
 ```
 
 ## People Names
@@ -63,6 +102,10 @@ Each entry: `raw_term | correct_term | context_hint | model`
 Романів | Романів | | ok
 Марені | Марині | | both
 Маріяна | Мар'яна | | both
+Луара | Лора | ЛОР context | both
+Хазер | Хезер | | both
+Сезар | Хезер | | both
+Ліані | Мар'яні | | both
 ```
 
 ## Context-Dependent
@@ -72,6 +115,17 @@ Each entry: `raw_term | correct_term | context_hint | model`
 РНД | R&D | | both
 скрайпінг | scraping | web/data context | both
 скрепет | scrape | web context | both
+колкрапи | call preps | | both
+колпрепи | call preps | | both
+пров'ю | персонал рев'ю | | both
+СВП | CV | | both
+експлуатажне | експектейшни | | both
+екстанс | експенс | | both
+аудит.диту | аудиту | | both
+ткенгу | тікетингу | | both
+обтіки | в тікетингу | | both
+докофісу | бекофісу | | both
+атукух | аплікух | | both
 бойлерплей | boilerplate | code/template context | both
 ```
 
@@ -82,4 +136,6 @@ Google С | Google SX | | parakeet_mlx
 селес-асістент | Sales Assistant | | both
 хаб-спот | HubSpot | | parakeet_mlx
 Хобспот | HubSpot | | parakeet_mlx
+standing | expense | employee context | both
+Ding Dissycle | Ticketing Recycle | | both
 ```

@@ -331,9 +331,10 @@ func (u *UnifiedTranscriptionService) processSingleTrackJob(ctx context.Context,
 		}
 	}
 
-	// Post-process: apply dictionary corrections
+	// Post-process: apply dictionary corrections, then LLM correction
 	if transcriptResult != nil {
 		transcriptResult = u.applyPostProcessing(ctx, transcriptResult, transcriptionModelID)
+		transcriptResult = u.applyLLMPostProcessing(ctx, transcriptResult)
 	}
 
 	// Save results to database
@@ -1035,6 +1036,63 @@ func (u *UnifiedTranscriptionService) applyPostProcessing(ctx context.Context, r
 		corrected.WordSegments = output.WordSegments
 	}
 
+	return &corrected
+}
+
+// applyLLMPostProcessing runs postprocess.py llm-clean-json on the transcript.
+// Uses Ollama for contextual correction of ASR errors.
+// Non-fatal: if Ollama is unavailable or fails, returns original result.
+func (u *UnifiedTranscriptionService) applyLLMPostProcessing(ctx context.Context, result *interfaces.TranscriptResult) *interfaces.TranscriptResult {
+	execPath, err := os.Executable()
+	if err != nil {
+		return result
+	}
+	scriptPath := filepath.Join(filepath.Dir(execPath), "postprocess.py")
+	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
+		return result
+	}
+
+	type postprocessInput struct {
+		Text     string                         `json:"text"`
+		Segments []interfaces.TranscriptSegment `json:"segments"`
+	}
+	input := postprocessInput{
+		Text:     result.Text,
+		Segments: result.Segments,
+	}
+	inputJSON, err := json.Marshal(input)
+	if err != nil {
+		logger.Warn("LLM postprocess: failed to marshal input", "error", err)
+		return result
+	}
+
+	cmd := exec.CommandContext(ctx, "python3", scriptPath, "llm-clean-json")
+	cmd.Stdin = strings.NewReader(string(inputJSON))
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	logger.Info("LLM postprocess: starting Ollama correction")
+	if err := cmd.Run(); err != nil {
+		logger.Warn("LLM postprocess: script failed", "error", err, "stderr", stderr.String())
+		return result
+	}
+
+	if stderr.Len() > 0 {
+		logger.Info("LLM postprocess", "log", strings.TrimSpace(stderr.String()))
+	}
+
+	var output postprocessInput
+	if err := json.Unmarshal([]byte(stdout.String()), &output); err != nil {
+		logger.Warn("LLM postprocess: failed to parse output", "error", err)
+		return result
+	}
+
+	corrected := *result
+	corrected.Text = output.Text
+	if len(output.Segments) > 0 {
+		corrected.Segments = output.Segments
+	}
 	return &corrected
 }
 
