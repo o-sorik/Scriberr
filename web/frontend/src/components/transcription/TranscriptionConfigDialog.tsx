@@ -602,6 +602,19 @@ function WhisperConfig({ params, updateParam, isMultiTrack }: ConfigProps) {
 
                         {params.diarize && (
                             <div className="p-4 bg-[var(--bg-main)] rounded-xl border border-[var(--border-subtle)] space-y-4">
+                                <FormField label="Diarization Model">
+                                    <Select value={params.diarize_model} onValueChange={(v) => updateParam('diarize_model', v)}>
+                                        <SelectTrigger className={selectTriggerClassName}>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className={selectContentClassName}>
+                                            <SelectItem value="foxnose" className={selectItemClassName}>FoxNose (fast, no token)</SelectItem>
+                                            <SelectItem value="pyannote" className={selectItemClassName}>Pyannote (accurate, needs HF token)</SelectItem>
+                                            <SelectItem value="nvidia_sortformer" className={selectItemClassName}>NVIDIA Sortformer</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </FormField>
+
                                 <div className="grid grid-cols-2 gap-4">
                                     <FormField label="Min Speakers" optional>
                                         <Input
@@ -627,6 +640,8 @@ function WhisperConfig({ params, updateParam, isMultiTrack }: ConfigProps) {
                                     </FormField>
                                 </div>
 
+                                {params.diarize_model === "pyannote" && (
+                                <>
                                 <FormField label="Hugging Face Token" description={PARAM_DESCRIPTIONS.hf_token}>
                                     <Input
                                         type="password"
@@ -664,6 +679,8 @@ function WhisperConfig({ params, updateParam, isMultiTrack }: ConfigProps) {
                                         </FormField>
                                     </div>
                                 </div>
+                                </>
+                                )}
                             </div>
                         )}
                     </div>
@@ -804,6 +821,19 @@ function ParakeetMLXConfig({ params, updateParam, isMultiTrack }: ConfigProps) {
 
                         {params.diarize && (
                             <div className="p-4 bg-[var(--bg-main)] rounded-xl border border-[var(--border-subtle)] space-y-4">
+                                <FormField label="Diarization Model">
+                                    <Select value={params.diarize_model} onValueChange={(v) => updateParam('diarize_model', v)}>
+                                        <SelectTrigger className={selectTriggerClassName}>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className={selectContentClassName}>
+                                            <SelectItem value="foxnose" className={selectItemClassName}>FoxNose (fast, no token)</SelectItem>
+                                            <SelectItem value="pyannote" className={selectItemClassName}>Pyannote (accurate, needs HF token)</SelectItem>
+                                            <SelectItem value="nvidia_sortformer" className={selectItemClassName}>NVIDIA Sortformer</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </FormField>
+
                                 <div className="grid grid-cols-2 gap-4">
                                     <FormField label="Min Speakers" optional>
                                         <Input
@@ -829,6 +859,7 @@ function ParakeetMLXConfig({ params, updateParam, isMultiTrack }: ConfigProps) {
                                     </FormField>
                                 </div>
 
+                                {params.diarize_model === "pyannote" && (
                                 <FormField label="Hugging Face Token" description={PARAM_DESCRIPTIONS.hf_token}>
                                     <Input
                                         type="password"
@@ -838,6 +869,7 @@ function ParakeetMLXConfig({ params, updateParam, isMultiTrack }: ConfigProps) {
                                         className={inputClassName}
                                     />
                                 </FormField>
+                                )}
                             </div>
                         )}
                     </div>
